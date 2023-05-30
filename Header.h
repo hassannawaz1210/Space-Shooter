@@ -179,6 +179,42 @@ public:
 	}
 };
 
+class Teleport
+{
+public:
+
+	int count = 0;
+	int maxCount = 3;
+	sf::Text teleportText;
+	sf::Font font;
+	sf::RectangleShape lowerRect;
+	sf::RectangleShape upperRect;
+
+	Teleport()
+	{
+		if(!font.loadFromFile("./fonts/score_font.ttf")) std::cout << "Error loading teleport font.\n";
+		teleportText.setFont(font);
+		teleportText.setCharacterSize(20);
+		teleportText.setFillColor(sf::Color::White);
+		teleportText.setPosition(sf::Vector2f(880, 630));
+		teleportText.setString("Teleport");
+		//set lower rect color to light blue
+		lowerRect.setFillColor(sf::Color(0, 255, 255, 100));
+		lowerRect.setSize(sf::Vector2f(100, 30));
+		lowerRect.setPosition(sf::Vector2f(880, 660));
+		//
+		upperRect.setFillColor(sf::Color::Blue);
+		upperRect.setPosition(sf::Vector2f(880, 660));
+	}
+
+		void updateTeleportRect()
+	{
+		if(count>maxCount) count = maxCount;
+		upperRect.setSize(sf::Vector2f(33.3 * count, 30));
+	}
+
+};
+
 class Score
 {
 public:
@@ -245,7 +281,7 @@ public:
 		body.setFillColor(sf::Color::White);
 		if (!bossTexture.loadFromFile("./sprites/boss.png")) std::cout << "Error loading boss texture.\n";
 		body.setTexture(&bossTexture);
-		body.setSize(sf::Vector2f(200, 200));
+		body.setSize(sf::Vector2f(100, 100));
 		body.setOrigin(body.getSize().x / 2, body.getSize().y / 2);
 	}
 
@@ -258,34 +294,46 @@ public:
 	void updateBoss(Player& player, sf::Vector2f playerAim, std::vector<Bullet>& bullets)
 	{
 		sf::Vector2f direction = player.ship.getPosition() - body.getPosition();
-		 	float magnitude = sqrt(pow(direction.x, 2) + pow(direction.y, 2));
-		 	direction.x = direction.x / magnitude;
-		 	direction.y = direction.y / magnitude;
-		 	if (!player.ship.getGlobalBounds().intersects(body.getGlobalBounds()))
-		 	{
-		 		body.setRotation(atan2(direction.y, direction.x) * 180 / 3.14 + 90);
-		 	}
-
-		for(auto& bullet : bullets)
+		float magnitude = sqrt(pow(direction.x, 2) + pow(direction.y, 2));
+		direction.x = direction.x / magnitude;
+		direction.y = direction.y / magnitude;
+		if (!player.ship.getGlobalBounds().intersects(body.getGlobalBounds()))
 		{
-			if(!bullet.hasBeenConsideredForDodging && isBossInAimDirection(player, playerAim))
+			body.setRotation(atan2(direction.y, direction.x) * 180 / 3.14 + 90);
+		}
+
+		for (auto& bullet : bullets)
+		{
+			if (!bullet.hasBeenConsideredForDodging && isBossInAimDirection(player, playerAim))
 			{
-				// Generate random numbers to determine the direction and distance to move
-				int xDirection = rand() % 2 == 0 ? -1 : 1;
-				int yDirection = rand() % 2 == 0 ? -1 : 1;
-				float xDistance = rand() % 200 + 1;
-				float yDistance = rand() % 200 + 1;
+				// Generate random number to determine whether to move left or right
+				bool moveLeft = rand() % 2 == 0;
 
-				// Calculate the new position
-				float newXPos = body.getPosition().x + xDirection * xDistance;
-				float newYPos = body.getPosition().y + yDirection * yDistance;
+				if (moveLeft) {
+					// Move the boss left
+					float newXPos = body.getPosition().x - (200 + 1);
+					if (newXPos >= 0) {
+						body.setPosition(newXPos, body.getPosition().y);
+					}
+				}
+				else {
+					// Move the boss right
+					float newXPos = body.getPosition().x + ( 200 + 1);
+					if (newXPos <= WINDOW_WIDTH) {
+						body.setPosition(newXPos, body.getPosition().y);
+					}
+				}
 
-				// Check if the new position is within the window bounds
-				if(newXPos >= 0 && newXPos <= WINDOW_WIDTH && newYPos >= 0 && newYPos <= WINDOW_HEIGHT)
-				{
+				// Generate random number to determine whether to teleport to opposite coordinates
+				bool teleport = rand() % 2 == 0;
+
+				if (teleport) {
+					// Teleport the boss to opposite coordinates
+					float newXPos = WINDOW_WIDTH - body.getPosition().x;
+					float newYPos = WINDOW_HEIGHT - body.getPosition().y;
 					body.setPosition(newXPos, newYPos);
 				}
-				
+
 				// Set the flag to true so the bullet isn't considered again
 				bullet.hasBeenConsideredForDodging = true;
 			}

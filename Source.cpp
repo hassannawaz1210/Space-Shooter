@@ -6,17 +6,47 @@
 // -------------------
 //RANDOM(LOWER LIMIT, UPPER LIMIT
 //---------------
-sf::Vector2f randCoordsGenerator()
-{
-    int x, y;
-    do
+    sf::Vector2f randCoordsGenerator()
     {
-        x = rand() % (1100 - (-99)) + (-100); // between 1300 to -100
-        y = rand() % (800 - (-99)) + (-100); // between 1000 to -100
-    } while ((x >= 0 && x <= 1000) && (y >= 0 && y <= 700));
-    return sf::Vector2f(x, y);
-}
+        int x, y;
+        do
+        {
+            x = rand() % (1100 - (-99)) + (-100); // between 1300 to -100
+            y = rand() % (800 - (-99)) + (-100); // between 1000 to -100
+        } while ((x >= 0 && x <= 1000) && (y >= 0 && y <= 700));
+        return sf::Vector2f(x, y);
+    }
 
+
+    void teleportation(sf::Event event, Player &player, Teleport &teleport)
+    {
+        float x, y;
+        x = player.ship.getPosition().x;
+        y = player.ship.getPosition().y;
+        if(teleport.count > 0)
+        {
+            if (event.key.code == sf::Keyboard::Key::Space && sf::Keyboard::isKeyPressed(sf::Keyboard::W))
+            {
+                player.ship.setPosition(x, y - 50);
+                teleport.count--;
+            }
+            else if (event.key.code == sf::Keyboard::Key::Space && sf::Keyboard::isKeyPressed(sf::Keyboard::S))
+            {
+                player.ship.setPosition(x, y + 50);
+                teleport.count--;
+            }
+            else if (event.key.code == sf::Keyboard::Key::Space && sf::Keyboard::isKeyPressed(sf::Keyboard::A))
+            {
+                player.ship.setPosition(x - 50, y);
+                teleport.count--;
+            }
+            else if (event.key.code == sf::Keyboard::Key::Space && sf::Keyboard::isKeyPressed(sf::Keyboard::D))
+            {
+                player.ship.setPosition(x + 50, y);
+                teleport.count--;
+            }
+        }
+    }
 
 int main()
 {
@@ -37,6 +67,11 @@ int main()
 
     //boss 
     Boss boss;
+    sf::Texture bossBulletTex;
+	if (!bossBulletTex.loadFromFile("./sprites/boss_bullet.png")) std::cout << "Images couldnt be loaded.\n";
+    sf::Clock bossBulletClock;
+    std::vector<Bullet> bossBullets;
+
 
     //background music
     sf::Music bgMusic;
@@ -81,6 +116,10 @@ int main()
     //power move
     PowerMove powerMove;
 
+    //teleport
+    Teleport teleport;
+    sf::Clock teleportClock;
+
     //Enemies
     Enemy enemy;
     std::vector<Enemy> enemies;
@@ -119,6 +158,9 @@ int main()
             case sf::Event::EventType::KeyPressed:
             {
                 if (event.key.code == sf::Keyboard::Key::Escape) window.close();
+
+                teleportation(event, player, teleport);
+
                 break;
             }
             case sf::Event::EventType::MouseButtonReleased:
@@ -197,6 +239,23 @@ int main()
             boss.updateBoss(player, unitVector, bullets);
         }
 
+        //boss shooting
+        if(bossBulletClock.getElapsedTime().asSeconds() >= 1)
+        if (boss.bossLevel(level.currentLevel))
+        {
+            //find the unit vector between player and boss
+            sf::Vector2f difVector = player.ship.getPosition() - boss.body.getPosition();
+            sf::Vector2f directionVector = difVector / float(sqrt(pow(difVector.x, 2) + pow(difVector.y, 2)));
+            //rotate the bullet in the direction of the unit vector
+            bullet.shell.setRotation((atan2(directionVector.y, directionVector.x) * 180 / 3.14) + 90);
+            bullet.shell.setPosition(sf::Vector2f(boss.body.getPosition().x + (directionVector.x * 80), boss.body.getPosition().y + (directionVector.y * 80)));
+            bullet.shell.setTexture(&bossBulletTex);
+            bullet.currVelocity = directionVector * bullet.maxSpeed;
+            bossBullets.push_back(bullet);
+
+            bossBulletClock.restart();
+        }
+
         
         //finding direction for enemy and setting it in motion
         if(level.currentLevel == 1)
@@ -228,6 +287,12 @@ int main()
             bullets[i].shell.move(bullets[i].currVelocity);
         }
 
+        //boss bullets movement
+        for (int i = 0; i < bossBullets.size(); i++)
+		{
+			bossBullets[i].shell.move(bossBullets[i].currVelocity);
+		}
+
         //deleting the out of bounds bullets
         for (int i = 0; i < bullets.size(); i++)
         {
@@ -249,6 +314,55 @@ int main()
                 explode.play();
             }
         }
+
+        //deleting the out of bounds bossBullets
+        for (int i = 0; i < bossBullets.size(); i++)
+		{
+			if (bossBullets[i].shell.getPosition().x < 0 || bossBullets[i].shell.getPosition().x > window.getSize().x ||
+				bossBullets[i].shell.getPosition().y < 0 || bossBullets[i].shell.getPosition().y > window.getSize().y)
+				bossBullets.erase(bossBullets.begin() + i);
+		}
+
+        //deleting the bossBullets upon colliding with the ship
+        for (int i = 0; i < bossBullets.size(); i++)
+		{
+
+			sf::Vector2f difVector = bossBullets[i].shell.getPosition() - player.ship.getPosition();
+			float distance = sqrt(pow(difVector.x, 2) + pow(difVector.y, 2));
+			float sumOfRadii = bossBullets[i].shell.getRadius() + player.ship.getSize().x / 2;
+			if (distance < sumOfRadii)
+			{
+				bossBullets.erase(bossBullets.begin() + i);
+				explode.play();
+			}
+		}
+
+        ////collision between player bullets and boss bullets
+        //for (int i = 0; i < bullets.size(); i++)
+		      //  {
+			     //   for (int j = 0; j < bossBullets.size(); j++)
+			     //   {
+				    //    if (i >= bullets.size() || j >= bossBullets.size()) continue;
+
+				    //    sf::Vector2f difVector = bullets[i].shell.getPosition() - bossBullets[j].shell.getPosition();
+				    //    float distance = sqrt(pow(difVector.x, 2) + pow(difVector.y, 2));
+				    //    float sumOfRadii = bullets[i].shell.getRadius() + bossBullets[j].shell.getRadius();
+				    //    if (distance < sumOfRadii)
+				    //    {
+        //                    //explosion stuff
+        //                    explode.play();
+        //                    explosion_sprite.setPosition(enemies[i].body.getPosition());
+        //                    explosion_anim.flag = true;
+        //                    explosion_anim.currImage = 0;
+
+        //                    //deleting the bullets
+					   //     bullets.erase(bullets.begin() + i);
+					   //     bossBullets.erase(bossBullets.begin() + j);
+					   //     
+				    //    }
+			     //   }
+		      //  }
+
 
         //collision between bullets and enemies
         for (int i = 0; i < enemies.size(); i++)
@@ -300,6 +414,13 @@ int main()
             }
 		}
 
+        //updating teleport
+        if (teleportClock.getElapsedTime().asSeconds() > 1)
+        {
+            teleport.count++;
+            teleportClock.restart();
+        }
+		teleport.updateTeleportRect();
 
         //updating the explosions
         explosion_anim.Update(deltaTime);
@@ -330,6 +451,12 @@ int main()
         //drawing level text
         window.draw(level.levelText);
 
+        //drawing teleport rect and text
+        window.draw(teleport.lowerRect);
+		window.draw(teleport.upperRect);
+		window.draw(teleport.teleportText);
+
+
         //drawing player ship
         window.draw(player.ship);
 
@@ -344,6 +471,12 @@ int main()
 			window.draw(boss.body);
 		}
 
+        //drawing boss bullets
+        for (int i = 0; i < bossBullets.size(); i++)
+		{
+			window.draw(bossBullets[i].shell);
+		}
+          
         //drawing bullets
         for (int i = 0; i < bullets.size(); i++)
         {
